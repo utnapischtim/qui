@@ -4,6 +4,8 @@ from setuptools import find_packages, setup
 
 install_requires = [
     "click",
+    "matplotlib",
+    "pyqt5",
 ]
 
 packages = find_packages()

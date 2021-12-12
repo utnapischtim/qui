@@ -192,6 +192,39 @@ def added_by_index(data, do_plot):
 
 @qui.command()
 @click.option("--data", type=JSONFile("r"), required=True)
+def nested_histogram(data):
+    # x = [i for i in range(1, 70)]
+    # y = [i for i in range(0, 80000)]
+
+    x_axis_max = 0
+
+    for reflex_node_count in data:
+        if int(reflex_node_count) % 100 != 0:
+            continue
+
+        obj = data[reflex_node_count]
+
+        # x = list(int(i) for i in obj.keys())
+        x = list(map(int, obj.keys()))
+        x.sort()
+
+        if x_axis_max < max(x):
+            x_axis_max = max(x)
+
+        y = list(int(obj[str(i)]) for i in x)
+
+        plt.plot(x, y)
+
+    plt.xticks(list(i for i in range(0, x_axis_max + 2) if i % 2 == 0))
+
+    plt.xlabel("x - axis added by reflex node count")
+    plt.ylabel("y - axis how often")
+    plt.title("added by index!")
+    plt.show()
+
+
+@qui.command()
+@click.option("--data", type=JSONFile("r"), required=True)
 @click.option("--do-plot", type=bool, is_flag=True)
 def histogram(data, do_plot):
     histo = {}

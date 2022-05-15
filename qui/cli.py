@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2021 Christoph Ladurner
-
 import json
 import os
+import re
 import sys
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -199,8 +199,8 @@ def nested_histogram(data):
     x_axis_max = 0
 
     for reflex_node_count in data:
-        if int(reflex_node_count) % 100 != 0:
-            continue
+        # if int(reflex_node_count) % 10 != 0:
+        #     continue
 
         obj = data[reflex_node_count]
 
@@ -229,10 +229,15 @@ def nested_histogram(data):
 def histogram(data, do_plot):
     histo = {}
 
+    maximum = 0
+
     for reflex_node_count in data:
         for k, v in data[reflex_node_count].items():
             if k not in histo:
                 histo[k] = 0
+
+            if int(k) > maximum:
+                maximum = int(k)
 
             histo[k] += v
 
@@ -244,10 +249,14 @@ def histogram(data, do_plot):
         x = ordered_histo.keys()
         y = ordered_histo.values()
 
+        plt.xticks(list(i for i in range(0, maximum) if i % 6 == 0))
+
         plt.plot(x, y)
-        plt.xlabel("x - axis added by reflex node count")
-        plt.ylabel("y - axis how often")
-        plt.title("added by index!")
+        plt.xlabel("Maximal modification counter for a motorcycle graph.")
+        plt.ylabel("Occurens of the maximal modification counter.")
+        # plt.title(
+        #     "How often a maximal modification counter occurs independent of the reflex vertices number."
+        # )
         plt.show()
     else:
         pprint(ordered_histo)
@@ -291,6 +300,156 @@ def fix_output_format(input_dir):
             json.dump(output_obj, fp)
 
 
+@qui.command()
+@click.option("--input-dir", type=click.Path(exists=True))
+@click.option("--maximal-modification-counter", default=17)
+def motorcycle_accumulation_per_type(input_dir, maximal_modification_counter):
+    path_list = Path(input_dir).rglob("*.json")
+    types = {}
+    legends = {}
+
+    for path in path_list:
+        title = (
+            re.search("^.*/([a-z0-9\-_]+)_[0-9][0-9]+", str(path))
+            .group(1)
+            .replace("_", "-")
+        )
+        if title not in types:
+            types[title] = []
+            legends[title] = None
+
+        types[title].append(path)
+
+    for title in types.keys():
+        accumulation_counter = {}
+        for path in types[title]:
+            with open(path) as fp:
+                obj = json.load(fp)
+
+            if "list" not in obj:
+                print(path)
+                continue
+
+            for k in obj["list"]:
+                for o in k["reductionCounterInformation"]:
+                    mod_cou = o["reductionCounter"]
+                    if mod_cou not in accumulation_counter:
+                        accumulation_counter[mod_cou] = 0
+                    accumulation_counter[mod_cou] += 1
+
+        k = dict(sorted(accumulation_counter.items()))
+        x = k.keys()
+        y = k.values()
+        (legends[title],) = plt.plot(x, y)
+
+    plt.legend(legends.values(), legends.keys(), scatterpoints=1, loc="upper right")
+    plt.ticklabel_format(style="plain")
+    plt.xticks(
+        list(i for i in range(0, maximal_modification_counter + 2) if i % 1 == 0)
+    )
+    plt.xlabel("Modification Counters")
+    plt.ylabel("Occurens")
+    plt.show()
+
+
+@qui.command()
+@click.option("--input-dir", type=click.Path(exists=True))
+@click.option("--maximal-modification-counter", default=17)
+def motorcycle_accumulation(input_dir, maximal_modification_counter):
+    path_list = Path(input_dir).rglob("*.json")
+    modification_counters = {}
+
+    for path in path_list:
+        with open(path) as fp:
+            obj = json.load(fp)
+
+        if "list" not in obj:
+            print(path)
+            continue
+
+        for k in obj["list"]:
+            for o in k["reductionCounterInformation"]:
+                mod_cou = o["reductionCounter"]
+                mod_cou = mod_cou if mod_cou != 0 else 1
+                if mod_cou not in modification_counters:
+                    modification_counters[mod_cou] = 0
+                modification_counters[mod_cou] += 1
+
+    modification_counters = dict(sorted(modification_counters.items()))
+
+    x = modification_counters.keys()
+    y = modification_counters.values()
+
+    plt.ticklabel_format(style="plain")
+    plt.xticks(
+        list(i for i in range(0, maximal_modification_counter + 2) if i % 6 == 0)
+    )
+
+    plt.plot(x, y)
+    plt.xlabel("Modification Counters")
+    plt.ylabel("Occurens")
+    plt.show()
+
+
+@qui.command()
+@click.option("--input-dir", type=click.Path(exists=True))
+@click.option("--maximal", default=4)
+def mean_plot(input_dir, maximal):
+    path_list = Path(input_dir).rglob("*.json")
+    types = {}
+    legends = {}
+
+    for path in path_list:
+        title = (
+            # re.search("^.*/([a-z0-9\-_]+)_[0-9][0-9]+", str(path))
+            re.search("^.*/([A-Z0-9]+)_[0-9]+_[0-9]+", str(path))
+            .group(1)
+            .replace("_", "-")
+        )
+        if title not in types:
+            types[title] = []
+            legends[title] = None
+
+        types[title].append(path)
+
+    # path_count = sum(len(a) for a in types.values())
+    # print(f"sum: {path_count}")
+
+    for title in types.keys():
+        mean_modification_counter = {}
+        for path in types[title]:
+            with open(path) as fp:
+                obj = json.load(fp)
+
+            if "list" not in obj:
+                print(path)
+                continue
+
+            for k in obj["list"]:
+                reflex_vertices_number = len(k["reductionCounterInformation"])
+                modification_counter_sum = sum(
+                    o["reductionCounter"] if o["reductionCounter"] != 0 else 1
+                    for o in k["reductionCounterInformation"]
+                )
+
+                if reflex_vertices_number not in mean_modification_counter:
+                    mean_modification_counter[reflex_vertices_number] = []
+
+                mean_modification_counter[reflex_vertices_number].append(
+                    modification_counter_sum / reflex_vertices_number
+                )
+
+        x = mean_modification_counter.keys()
+        y = [sum(a) / len(a) for a in mean_modification_counter.values()]
+
+        legends[title] = plt.scatter(x, y)
+
+    plt.legend(legends.values(), legends.keys(), scatterpoints=1, loc="upper right")
+    plt.xlabel("number of reflex vertices")
+    plt.ylabel("average modification counter")
+    plt.show()
+
+
 # @click.option("--data", type=JSONFile("r"), required=True)
 @qui.command()
 @click.option("--input-dir", type=click.Path(exists=True))
@@ -303,11 +462,19 @@ def run(input_dir, output_file):
     for path in pathlist:
         with open(path) as fp:
             obj = json.load(fp)
+
+        if "list" not in obj:
+            print(path)
+            continue
+
         for k in obj["list"]:
             try:
                 biggest_t = max(
                     o["reductionCounter"] for o in k["reductionCounterInformation"]
                 )
+
+                if biggest_t == 0:
+                    biggest_t = 1
             except TypeError:
                 print(f"TypeError: path {path}")
                 sys.exit()
@@ -315,13 +482,15 @@ def run(input_dir, output_file):
             reflex_node_count = len(k["reductionCounterInformation"])
             if reflex_node_count not in histogram:
                 histogram[reflex_node_count] = {}
+
             if biggest_t not in histogram[reflex_node_count]:
                 histogram[reflex_node_count][biggest_t] = 0
+
             histogram[reflex_node_count][biggest_t] += 1
 
             if biggest_t > biggest_reduction_counter:
                 biggest_reduction_counter = biggest_t
-                json.dump(k, output_file)
+                # json.dump(k, output_file)
                 print(
                     f"reflex_node_count: {reflex_node_count}, \
                     biggest: {biggest_reduction_counter}, \
